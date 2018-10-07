@@ -1,0 +1,153 @@
+---
+title: "Twitter MeTwo Bewerbung"
+output: html_document
+bibliography: Projekt MeTwo.bib
+---
+
+Ich konnte bereits in der Vergangenheit sowohl Erfahrungen mit Netzwerkanalysen und Natural Language Processing beschäftigt. In meiner [Bachelorarbeit](http://holnburger.com/Bachelorarbeit-Verschwoerungstheorien_und_soziale_Netzwerke.pdf) habe ich die Vernutzung von Facebookseiten, welche Verschwörungstheorien verbreiten, untersucht. Hierbei habe ich die Daten mit dem Netzwerk-Tool Gephi visualisiert, welches sich vor allem für sehr große Datensätze eignet. Ich habe außerdem bereits Erfahrungen mit igraph, tidygraph + ggraph und visNetwork sammeln können.
+
+Mit Natural Language Processing habe ich mich im Rahmen einer [Hausarbeit](http://holnburger.com/Auf_den_Spuren_des_Wutbuergers.pdf) beschäftigt, indem ich die Texte der Parteiseiten auf Facebook untersucht habe. Hier beschränkte sich meine Auswertung jedoch vor allem auf PreProcessing und der Abgleich mit verschiedenen Sentiment Diktionären. Hier konnte ich besonders gute Erfahrung mit dem Diktionär von @haselmayer_sentiment_2017-1 sammeln.
+
+Zuletzt konnte ich meine Kentnisse in Topic Modeling erweitern, indem ich im Rahmen einer Hausarbeit die Inhalte von 2.109 Entschließungsanträgen auswertete und dabei auf ein semi-automatisiertes Topic Model zurückgreifen konnte. Das Packet [Structural Topic Model (STM)](https://cran.r-project.org/web/packages/stm/vignettes/stmVignette.pdf) von @roberts_stm_2018 stellte dabei eine große Bereicherung da. 
+Diese jüngst erworbenen Kenntnisse könnte ich in dem von CorrelAid Projekt zur __Computergestützte Analyse der #MeTwo-Debatte auf Twitter__ vertiefen und bewerbe mich deshalb vorwiegend auf den Projektteil __Text Mining/Natural Language Processing__.
+
+## Motivation
+
+Meine Interesse an der Auswertung von Online-Diskursen ist nicht erst seit meiner Bachelorarbeit geweckt worden. Auf meinem [Blog](http://blog.holnburger.com) habe ich bereits einige Artikel über die Verbreitung von Hassrede, Verschwörungstheorien und Desinformation verfasst. Des weiteren war ich an Publikationen zu diesen Themen beteiligt, zuletzt an einem [Forschungsbericht](https://www.isdglobal.org/wp-content/uploads/2018/09/ISD-NetzDG-Report-German-FINAL-26.9.18.pdf) der Online Civil Courage Initiative (OCCI) in welchem ich zusammen mit Karolin Schwarz die Rolle von Desinformation im Netz und die Maßnahmen der Plattformen verfasst habe. 
+
+Da mir diese Thematiken am Herz liegen, bin ich auch in zahlreichen Vereinen und Gruppierungen aktiv, welche die Hassrede im Internet nicht nur untersuchen, sondern auch mögliche Lösungsansätze entwickeln. Ich bin Mitglied des Lenkungsausschusses des OCCI, Mitglied der [Gelben Hand](https://www.gelbehand.de/home/) und natürlich auch Mitglied bei CorrelAid. 
+Außerdem bin ich in der politischen Jugendbildungsarbeit aktiv und habe bereits zahlreiche Seminare zu den Themen Rechtsextremismus, gruppenbezogene Menschenfeindlichkeit und Geschlechtergerechtigkeit gegeben. Vor kurzer Zeit habe ich dieses Engagement professionalisiert und arbeite seit 01. September als politischer Referent für die [DGB-Jugend](http://jugend.dgb.de/).
+
+Meine Motivation für diese Projekt lässt sich vermutlich am besten durch eine kleine Untersuchung ausdrücken, welche ich im Rahmen der Bewerbung entwickeln konnte und welche sich sehr an den Anforderugnen des Projekts orientiert. Hierbei arbeite ich hauptsächlich mit dem Packet *rtweet* von @rtweet-package und den *tidyverse* Packeten von @wickham_tidyverse_2017-1.
+
+## Auswertung
+
+Im *rtweet* nutzen zu können, ist es zunächst notwendig, eine App bei Twitter zu registrieren. Seit Sommer 2018 ist das Verfahren hierfür ein wenig aufwendiger und es braucht einige Tage, ehe man die Zugangsdaten zur Twitter-API erhält und die App durch Twitter genehmigt wurde. 
+Für unsere Auswertung suchen wir bis zu 3.000 Tweets zur MeTwo Debatte und werten diese anschließend aus.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(rtweet)
+library(tidyverse)
+```
+
+```{r tweets, cache=TRUE, warning=FALSE, message=FALSE}
+tweets_metwo <- search_tweets("metwo", n = 3000)
+```
+
+Wir konnten leider nur `r nrow(tweets_metwo)` Tweets abgreifen. Twitter beschränkt die Suche ohne einen Premium-Zugriff leider nur auf die letzten 7 bis 9 Tage. 
+
+Die Tweets stammen von `r tweets_metwo %>% distinct(screen_name) %>% nrow()` Nutzern. Wir können die Interaktion der Nutzer sehr einfach über ein Netzwerk darstellen. Wir nutzen dafür die Packages *tidygraph* und *ggraph* von @pedersen_tidygraph_2018. 
+Wir werten hierfür die Mentions in den Tweets aus. Ein Hinweis: Wir werten die *screen_names* der Nutzer aus. Sicherer wäre allerdings eine Auswertung der User-IDs der Nutzer -- diese lassen sich nämlich nicht verändern.
+
+Wir werten außerdem aus, welche Nutzer besonder häufig gementioned wurden.
+
+## Netzwerkanalyse
+
+```{r graph, message=FALSE, warning=FALSE}
+library(tidygraph)
+library(ggraph)
+
+mention_network <- tweets_metwo %>%
+  select(screen_name, mentions_screen_name) %>%
+  unnest() %>%
+  na.omit() %>%
+  group_by(screen_name, mentions_screen_name) %>%
+  summarise(count_tweets = n()) %>%
+  arrange(-count_tweets)
+
+mentions_user <- tweets_metwo %>%
+  select(mentions_screen_name) %>%
+  unnest() %>%
+  na.omit() %>%
+  group_by(mentions_screen_name) %>%
+  summarise(mentions = n()) %>%
+  arrange(-mentions)
+```
+
+Mit diesen Daten können wir nun ein *tidygraph* Netzwerk als Data Frame bauen und anschließend diese mit *ggraph* darstellen. Uns interessieren dabei nur die drei größten Netzwerke -- Verbindungen zwischen lediglich zwei Nutzern interessieren uns nicht. 
+Wir bewerten die "Wichtigkeit" der Nutzer_innen nach Anzahl der Mentions und der Betweenness Centrality. 
+
+```{r warning=FALSE, fig.align="center"}
+mention_network_graph <- mention_network %>%
+  as_tbl_graph(directed = TRUE) %>%
+  activate(nodes) %>%
+  left_join(mentions_user, by = c("name" = "mentions_screen_name")) %>%
+  mutate(mentions = ifelse(is.na(mentions), 0, mentions)) %>%
+  filter(group_components() %in% c(1, 2, 3))
+
+set.seed(1)
+ggraph(mention_network_graph, layout = "fr") +
+  geom_edge_fan(alpha = 0.1) +
+  geom_node_point(aes(size = mentions, alpha = mentions)) +
+  scale_edge_color_gradient(low = "#132B43", high = "#56B1F7") +
+  theme_graph()
+```
+
+Wir erkennen in den drei größten Netzwerken durchaus einige "wichtige" Accounts. Ein paar Nutzer werden besonders häugi gementioned, dabei aber auch oft von einer Großzahl an Nutzern, welche mit dem Rest des Netzwerks nicht interagieren. Welche Nutzer werden besonders häufig gementioned? Hierfür setzen wir für alle Nutzer mit mehr als 200 Mentions ein Label, welches wir später an ggraph übergeben können.
+
+```{r warning=FALSE, fig.align="center"}
+mention_network_graph <- mention_network_graph %>%
+  mutate(label = ifelse(mentions > 200, name, NA))
+
+set.seed(1)
+ggraph(mention_network_graph, layout = "fr") +
+  geom_edge_fan(alpha = 0.1) +
+  geom_node_point(aes(size = mentions, alpha = mentions)) +
+  scale_edge_color_gradient(low = "#132B43", high = "#56B1F7") +
+  geom_node_label(aes(label = label), repel = TRUE) +
+  theme_graph()
+```
+
+Viele Twitter-Nutzer zitieren in ihren Tweets Redhead4645, allerdings weit abseits der anderen Wolken. Wir wollen wissen, welcher Tweet hier so häufig (vermutlich) retweeted wurde. 
+
+```{r}
+tweets_metwo %>%
+  select(text, mentions_screen_name) %>%
+  unnest() %>%
+  na.omit() %>%
+  filter(mentions_screen_name == "Redhead4645") %>%
+  group_by(text) %>%
+  summarise(count_tweets = n()) %>%
+  pull(text)
+```
+
+In dem Tweet findet sich auch ein Link. Hier handelt es sich um ein Bild, welches einem Tweet angehängt werden kann. In diesem Fall ist es dieses Bild:
+<center>
+![](https://pbs.twimg.com/media/DohklJNW4AAvRrR.jpg:large)
+</center>
+
+Ziemlich eindeutig ein Tweet aus dem Trump-Lager.
+
+### Verbesserung des Netzwerks
+
+Wir könnten das Netzwerk weiter verbessern, indem wir Zentralitätsmaße (Betweenness-Centrality, Eigenvektor-Centrality) und ähnliches in unsere Bewertung und Visualisierung mit einbeziehen. Somit können wir genauere Aussagen über Gatekeeper, Prominente Twitter-Accounts und selbstreferentielle Netzwerke treffen. Wir könnten das Netzwerk auch durch *shiny* und *visNetwork* visualisieren und damit auch interaktiv gestalten. Ein Beispiel hierfür:
+
+### Interaktives Netzwerk
+
+```{r}
+library(visNetwork)
+
+images_screen_name <- tweets_metwo %>%
+  select(screen_name, profile_image_url) %>%
+  distinct() %>%
+  rename(image = profile_image_url)
+
+vis_mention_graph <- mention_network_graph %>%
+  filter(group_components() == 3) %>%
+  activate(nodes) %>%
+  left_join(images_screen_name, by = c("name" = "screen_name")) %>%
+  mutate(shape = ifelse(!is.na(image), "circularImage", "dot")) %>%
+  toVisNetworkData()
+
+visNetwork(nodes = vis_mention_graph$nodes, edges = vis_mention_graph$edges)
+```
+
+In unserem Fall haben wir die Nutzerbilder nur bekommen, wenn die Person auch getweeted hat. Wir können dies später noch beheben.
+To be continued…
+
+## Text Mining und NLP
+
+To be continued…
+
+
+## Referenzen
